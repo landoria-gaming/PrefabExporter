@@ -71,14 +71,6 @@ internal sealed class AssetRipperSession : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
-    // Exports the loaded assets as a Unity project.
-    public async Task ExportUnityProject(string path, CancellationToken cancellation)
-    {
-        using var form = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("Path", path) });
-        using var response = await client.PostAsync("/Export/UnityProject", form, cancellation);
-        response.EnsureSuccessStatusCode();
-    }
-
     // Fetches text from the local AssetRipper server.
     public async Task<string> GetText(string path, CancellationToken cancellation)
     {

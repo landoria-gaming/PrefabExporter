@@ -96,7 +96,6 @@ public partial class MainWindow : Window
         PrefabName.IsEnabled = available && selected;
         RefsButton.IsEnabled = available && selected;
         ExtractButton.IsEnabled = available && selected;
-        UnityExportButton.IsEnabled = available && selected;
         IndexSelector.IsEnabled = available && IndexSelector.Items.Count > 0;
     }
 
@@ -174,7 +173,6 @@ public partial class MainWindow : Window
         PrefabName.IsEnabled = !indexing && selected;
         RefsButton.IsEnabled = !indexing && selected;
         ExtractButton.IsEnabled = !indexing && selected;
-        UnityExportButton.IsEnabled = !indexing && selected;
         IndexSelector.IsEnabled = !indexing && IndexSelector.Items.Count > 0;
         CancelButton.IsEnabled = indexing;
     }
@@ -309,25 +307,6 @@ public partial class MainWindow : Window
             string assets = GetIndex("assets");
             string references = GetIndex("references");
             return token => PrefabExtractor.Extract(assets, references, query, AppContext.BaseDirectory, progress, token, ApplicationLog.Writer, settings?.AssetRipperPath);
-        });
-    }
-
-    // Exports a Unity project containing the selected prefab and loaded assets.
-    private async void UnityExport_Click(object sender, RoutedEventArgs e)
-    {
-        string query = PrefabName.Text.Trim();
-        if (query.Length == 0)
-        {
-            Output.Text = "Enter the exact prefab name.";
-            return;
-        }
-        var progress = new Progress<string>(message => Output.Text = message);
-        await Execute(() =>
-        {
-            string assets = GetIndex("assets");
-            string references = GetIndex("references");
-            return token => UnityProjectExporter.Export(assets, references, query, AppContext.BaseDirectory,
-                settings?.AssetRipperPath, progress, token);
         });
     }
 

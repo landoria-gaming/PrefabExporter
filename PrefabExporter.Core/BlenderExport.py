@@ -156,14 +156,11 @@ def enlarge_image(source, directory, index):
     result.save()
     return result
 
-# Creates the Blender and FBX files from independently built scenes.
+# Creates the FBX file from the extracted scene.
 def main():
     manifest = sys.argv[sys.argv.index("--") + 1]
     with open(manifest, encoding="utf-8") as source:
         plan = json.load(source)
-    build_scene(plan)
-    bpy.ops.file.pack_all()
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.splitext(plan["Output"])[0] + ".blend")
     build_scene(plan)
     bake_fbx_uvs()
     with tempfile.TemporaryDirectory(prefix="prefab-fbx-textures-") as directory:

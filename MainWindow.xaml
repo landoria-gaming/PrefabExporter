@@ -58,11 +58,6 @@
                         Padding="10,4"
                         Click="Extract_Click"
                         Content="Extract" />
-                <Button x:Name="UnityExportButton"
-                        Padding="10,4"
-                        Click="UnityExport_Click"
-                        Content="Export Unity"
-                        ToolTip="Exports a Unity project from the prefab's source files; it may contain many other assets." />
             </WrapPanel>
         </StackPanel>
         <StatusBar DockPanel.Dock="Bottom"

@@ -29,10 +29,6 @@ internal static class BlenderFbxExporter
             progress?.Report("Assembling FBX with Blender...");
             await Run(executable, script, manifest, cancellation);
             ValidateFbx(target);
-            if (!File.Exists(Path.ChangeExtension(target, ".blend")))
-            {
-                throw new InvalidDataException("Blender did not produce a Blender file.");
-            }
         }
         finally
         {
