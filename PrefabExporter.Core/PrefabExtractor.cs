@@ -81,8 +81,11 @@ public static class PrefabExtractor
     {
         try
         {
-            await BlenderFbxExporter.Export(plan, paths, name, stage, progress, cancellation);
-            result.AppendLine(name + ".fbx");
+            var outputs = await BlenderFbxExporter.Export(plan, paths, name, stage, progress, cancellation);
+            foreach (string output in outputs)
+            {
+                result.AppendLine(output);
+            }
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {

@@ -50,6 +50,7 @@ internal static class VisualSummary
             "MeshFilter" or "SkinnedMeshRenderer" => field.StartsWith("/m_Mesh[", StringComparison.Ordinal) ||
                 field.StartsWith("/m_Materials[", StringComparison.Ordinal),
             "MeshRenderer" => field.StartsWith("/m_Materials[", StringComparison.Ordinal),
+            "LODGroup" => field.StartsWith("/m_LODs[", StringComparison.Ordinal),
             "MonoBehaviour" => field.StartsWith("/m_icon[", StringComparison.Ordinal) ||
                 field.Contains("/m_icons[", StringComparison.Ordinal),
             "Material" => field.StartsWith("/m_Shader[", StringComparison.Ordinal) ||

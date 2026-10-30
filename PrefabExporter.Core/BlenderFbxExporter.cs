@@ -7,12 +7,14 @@ namespace PrefabExporter.Core;
 internal static class BlenderFbxExporter
 {
     // Reconstructs the prefab scene and runs Blender in the background.
-    public static async Task Export(ExtractionPlan plan, Dictionary<string, string> paths, string name,
+    public static async Task<IReadOnlyList<string>> Export(ExtractionPlan plan, Dictionary<string, string> paths, string name,
         string stage, IProgress<string>? progress, CancellationToken cancellation)
     {
         string executable = FindBlender();
         string target = Path.Combine(stage, name + ".fbx");
-        var scene = new PrefabSceneBuilder(plan, paths).Build(name, target, cancellation);
+        var builder = new PrefabSceneBuilder(plan, paths);
+        var scene = builder.Build(name, target, cancellation);
+        int maximumLod = builder.MaximumLodLevel;
         string temp = Path.Combine(Path.GetTempPath(), "prefab-blender-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         try
@@ -25,10 +27,28 @@ internal static class BlenderFbxExporter
             {
                 await source.CopyToAsync(output, cancellation);
             }
-            await File.WriteAllTextAsync(manifest, JsonSerializer.Serialize(scene), cancellation);
-            progress?.Report("Assembling FBX with Blender...");
-            await Run(executable, script, manifest, cancellation);
-            ValidateFbx(target);
+            var outputs = new List<string>();
+            for (int lod = 0; lod <= maximumLod; lod++)
+            {
+                string filename = maximumLod == 0 ? name + ".fbx" : $"{name}-lod{lod}.fbx";
+                target = Path.Combine(stage, filename);
+                var current = lod == 0 ? scene with { Output = target } :
+                    new PrefabSceneBuilder(plan, paths, lod).Build(name, target, cancellation);
+                await File.WriteAllTextAsync(manifest, JsonSerializer.Serialize(current), cancellation);
+                progress?.Report(maximumLod == 0 ? "Assembling FBX with Blender..." : $"Assembling FBX LOD {lod}...");
+                await Run(executable, script, manifest, cancellation);
+                ValidateFbx(target);
+                outputs.Add(filename);
+            }
+            return outputs;
+        }
+        catch
+        {
+            foreach (string file in Directory.EnumerateFiles(stage, "*.fbx"))
+            {
+                File.Delete(file);
+            }
+            throw;
         }
         finally
         {

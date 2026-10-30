@@ -10,16 +10,23 @@ internal sealed class PrefabSceneBuilder
     private readonly UnitySceneReader reader = new();
     private readonly Dictionary<string, List<ReferenceEdge>> edges;
     private readonly HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> excludedLodRenderers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> selectedLodRenderers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly int lodLevel;
     private readonly List<PrefabSceneNode> nodes = new();
 
     // Stores the indexed graph and extracted file paths.
-    public PrefabSceneBuilder(ExtractionPlan plan, Dictionary<string, string> paths)
+    public PrefabSceneBuilder(ExtractionPlan plan, Dictionary<string, string> paths, int lodLevel = 0)
     {
         this.plan = plan;
         this.paths = paths;
+        this.lodLevel = lodLevel;
         edges = plan.Edges.GroupBy(edge => edge.From, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
     }
+
+    // Reports the highest LOD index found in active groups.
+    public int MaximumLodLevel { get; private set; }
 
     // Builds the scene from one unambiguous prefab root.
     public PrefabScenePlan Build(string name, string output, CancellationToken cancellation)
@@ -54,6 +61,7 @@ internal sealed class PrefabSceneBuilder
             return;
         }
         var components = Outgoing(key, "/m_Component[").Select(edge => edge.To).ToArray();
+        ConfigureLods(components);
         string transformKey = components.FirstOrDefault(component => GetAsset(component).Type is "Transform" or "RectTransform")
             ?? throw new InvalidDataException("GameObject transform is missing.");
         var transform = reader.Read(GetAsset(transformKey));
@@ -69,6 +77,53 @@ internal sealed class PrefabSceneBuilder
             }
             AddGameObject(childObject, index, false, cancellation);
         }
+    }
+
+    // Selects the requested LOD's renderers for enabled groups on this object.
+    private void ConfigureLods(string[] components)
+    {
+        foreach (string key in components.Where(key => GetAsset(key).Type == "LODGroup"))
+        {
+            if (!reader.Read(GetAsset(key))["m_Enabled"].AsBool)
+            {
+                continue;
+            }
+            var lods = Outgoing(key, "/m_LODs[").Select(edge => (Edge: edge, Level: LodLevel(edge.Field)))
+                .Where(item => item.Level >= 0).ToList();
+            if (!lods.Any(item => item.Level == 0))
+            {
+                continue;
+            }
+            int max = lods.Max(item => item.Level);
+            MaximumLodLevel = Math.Max(MaximumLodLevel, max);
+            int selected = lods.Where(item => item.Level <= lodLevel).Max(item => item.Level);
+            foreach (var item in lods)
+            {
+                if (item.Level == selected)
+                {
+                    selectedLodRenderers.Add(item.Edge.To);
+                    excludedLodRenderers.Remove(item.Edge.To);
+                }
+                else if (!selectedLodRenderers.Contains(item.Edge.To))
+                {
+                    excludedLodRenderers.Add(item.Edge.To);
+                }
+            }
+        }
+    }
+
+    // Extracts the LOD array index from a reference field.
+    private static int LodLevel(string field)
+    {
+        const string marker = "/Array[0]/data[";
+        int start = field.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return -1;
+        }
+        start += marker.Length;
+        int end = field.IndexOf(']', start);
+        return end >= 0 && int.TryParse(field.AsSpan(start, end - start), out int level) ? level : -1;
     }
 
     // Builds a node and attaches its renderer's mesh and materials.
@@ -93,7 +148,7 @@ internal sealed class PrefabSceneBuilder
     private string? FindMesh(string filter, string renderer)
     {
         var component = reader.Read(GetAsset(renderer));
-        if (!component["m_Enabled"].AsBool)
+        if (!component["m_Enabled"].AsBool || excludedLodRenderers.Contains(renderer))
         {
             return null;
         }

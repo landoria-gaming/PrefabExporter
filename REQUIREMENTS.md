@@ -64,6 +64,7 @@ Build a desktop application for exploring assets from a local Valheim installati
 - Configure the AssetRipper executable or its directory through `AssetRipperPath` in `appsettings.json`.
 - Extract selected prefab icons and textures as PNG and individual meshes as GLB into `output/<prefab>/files`. Keep the assembled FBX in `output/<prefab>`. Report unsupported or missing resources.
 - Assemble an FBX for active static meshes with their transforms, color textures and normal maps, using Blender in the background. Report unsupported content.
+- Export each available level of detail into a separate FBX, using the highest available level for groups with fewer levels.
 - Enlarge FBX color textures with nearest-neighbor sampling to reduce smoothing in importers that use linear filtering.
 
 ## Acceptance criteria
