@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            ApplicationLog.Error(error);
             Output.Text = error.Message;
             IndexButton.IsEnabled = false;
             UpdateSearchAvailability();
@@ -79,16 +80,7 @@ public partial class MainWindow : Window
             UpdateSearchAvailability();
             return;
         }
-        try
-        {
-            string details = File.ReadAllText(Path.Combine(entry.Directory, "log.txt"));
-            Output.Text = string.IsNullOrWhiteSpace(details)
-                ? $"Selected index: {entry.Version}" : "Warnings and errors:\n\n" + details;
-        }
-        catch (Exception error)
-        {
-            Output.Text = "Could not read saved diagnostics: " + error.Message;
-        }
+        Output.Text = $"Selected index: {entry.Version}";
         UpdateSearchAvailability();
     }
 
@@ -109,6 +101,7 @@ public partial class MainWindow : Window
         {
             return;
         }
+        long logStart = ApplicationLog.Length;
         SetIndexingState(true);
         cancel = new CancellationTokenSource();
         IndexProgressBar.Value = 0;
@@ -118,11 +111,11 @@ public partial class MainWindow : Window
         {
             var progress = new Progress<string>(message => Output.Text = message);
             var indexingProgress = new Progress<IndexProgress>(UpdateIndexProgress);
-            await Task.Run(() => Indexer.Run(settings, progress, cancel.Token, indexingProgress));
+            await Task.Run(() => Indexer.Run(settings, progress, cancel.Token, indexingProgress, ApplicationLog.Writer));
             IndexProgressBar.IsIndeterminate = false;
             IndexProgressBar.Value = IndexProgressBar.Maximum;
             RefreshIndexes();
-            await ShowIndexDiagnostics(settings, null);
+            ShowIndexDiagnostics(logStart, null);
         }
         catch (OperationCanceledException)
         {
@@ -132,7 +125,7 @@ public partial class MainWindow : Window
         catch (Exception error)
         {
             IndexProgressBar.Value = 0;
-            await ShowIndexDiagnostics(settings, error.Message);
+            ShowIndexDiagnostics(logStart, error.Message);
         }
         finally
         {
@@ -152,24 +145,10 @@ public partial class MainWindow : Window
         IndexProgressBar.IsIndeterminate = progress.IsAuditing;
     }
 
-    // Shows the indexing result and any saved warnings or errors.
-    private async Task ShowIndexDiagnostics(Settings configuration, string? error)
+    // Shows the indexing result and diagnostics written during this run.
+    private void ShowIndexDiagnostics(long start, string? error)
     {
-        string details = "";
-        try
-        {
-            string version = Indexer.Version(configuration.ValheimPath);
-            string directory = IndexLocation.Resolve(configuration.IndexPath, configuration.ValheimPath, version);
-            string path = Path.Combine(directory, "log.txt");
-            if (File.Exists(path))
-            {
-                details = await File.ReadAllTextAsync(path);
-            }
-        }
-        catch (Exception readError)
-        {
-            details = "Could not read log.txt: " + readError.Message;
-        }
+        string details = ApplicationLog.ReadSince(start);
         string heading = error != null ? "Indexing failed: " + error :
             string.IsNullOrWhiteSpace(details) ? "Indexing complete. No warnings or errors." :
             "Indexing complete. Warnings and errors:";
@@ -253,10 +232,9 @@ public partial class MainWindow : Window
         {
             throw new InvalidOperationException("Select a completed index first.");
         }
-        string log = Path.Combine(entry.Directory, "log.txt");
         string assets = Path.Combine(entry.Directory, $"assets-{entry.Version}.jsonl");
         string references = Path.Combine(entry.Directory, $"references-{entry.Version}.jsonl");
-        if (!File.Exists(log) || File.Exists(log + ".previous") || !File.Exists(assets) || !File.Exists(references))
+        if (File.Exists(Path.Combine(entry.Directory, "log.txt.previous")) || !File.Exists(assets) || !File.Exists(references))
         {
             throw new InvalidOperationException("The selected index is no longer complete.");
         }
@@ -279,6 +257,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            ApplicationLog.Error(error);
             Output.Text = "Error: " + error.Message;
         }
         finally

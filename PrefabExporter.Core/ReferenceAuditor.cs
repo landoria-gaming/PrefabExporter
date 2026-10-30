@@ -30,7 +30,7 @@ internal sealed class ReferenceAuditor
         {
             return;
         }
-        writer.WriteLine($"WARNING: {missing.Count} unresolved targets ({missing.Values.Sum(item => (long)item.Count)} links).");
+        writer.WriteLine($"WARNING {DateTimeOffset.Now:O}: {missing.Count} unresolved targets ({missing.Values.Sum(item => (long)item.Count)} links).");
         writer.WriteLine("Matching uses collection basename and path ID or SoftReference ID.");
         foreach (var group in missing.OrderBy(item => item.Value.Category).ThenBy(item => item.Key)
             .GroupBy(item => item.Value.Category))

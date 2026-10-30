@@ -38,7 +38,7 @@ public static class IndexCatalog
         string assets = Path.Combine(directory, $"assets-{version}.jsonl");
         string references = Path.Combine(directory, $"references-{version}.jsonl");
         string log = Path.Combine(directory, "log.txt");
-        if (!File.Exists(assets) || !File.Exists(references) || !File.Exists(log) ||
+        if (!File.Exists(assets) || !File.Exists(references) ||
             File.Exists(log + ".previous") || new FileInfo(assets).Length == 0)
         {
             return;

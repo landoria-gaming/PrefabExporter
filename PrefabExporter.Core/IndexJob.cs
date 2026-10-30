@@ -11,21 +11,21 @@ internal sealed class IndexJob
     private readonly CancellationToken cancellation;
     private readonly IProgress<IndexProgress>? indexingProgress;
     private string data = "";
-    private StreamWriter log = null!;
+    private readonly TextWriter log;
     private int warnings;
     private long objects;
     private long links;
     private SoftReferenceManifest manifest = null!;
-    private bool publishing;
 
     // Stores the inputs for the indexing run.
     public IndexJob(Settings settings, IProgress<string> progress, CancellationToken cancellation,
-        IProgress<IndexProgress>? indexingProgress)
+        IProgress<IndexProgress>? indexingProgress, TextWriter log)
     {
         this.settings = settings;
         this.progress = progress;
         this.cancellation = cancellation;
         this.indexingProgress = indexingProgress;
+        this.log = log;
     }
 
     // Validates paths and writes the index files.
@@ -53,36 +53,25 @@ internal sealed class IndexJob
         Directory.CreateDirectory(destination);
         string assets = Path.Combine(destination, $"assets-{version}.jsonl");
         string refs = Path.Combine(destination, $"references-{version}.jsonl");
-        string logPath = Path.Combine(destination, "log.txt");
         try
         {
             using var assetWriter = new StreamWriter(assets + ".partial", false);
             using var refWriter = new StreamWriter(refs + ".partial", false);
-            using var logWriter = new StreamWriter(logPath + ".partial", false) { AutoFlush = true };
-            log = logWriter;
             CheckUnityVersion();
-            RunFiles(GetSources(bundles), assetWriter, refWriter, assets, refs, logPath);
+            RunFiles(GetSources(bundles), assetWriter, refWriter, assets, refs);
         }
-        catch (Exception error)
+        catch
         {
-            if (error is not OperationCanceledException && !publishing)
-            {
-                string partialLog = logPath + ".partial";
-                string details = File.Exists(partialLog) ? File.ReadAllText(partialLog) : "";
-                File.AppendAllText(logPath, details + $"ERROR: {error.Message}{Environment.NewLine}");
-            }
-            CleanPartialFiles(assets, refs, logPath);
+            CleanPartialFiles(assets, refs);
             throw;
         }
     }
 
     // Removes temporary files left by an interrupted indexing run.
-    private static void CleanPartialFiles(string assets, string refs, string logPath)
+    private static void CleanPartialFiles(string assets, string refs)
     {
-        foreach (string path in new[] { assets + ".partial", refs + ".partial", logPath + ".partial" })
-        {
-            File.Delete(path);
-        }
+        File.Delete(assets + ".partial");
+        File.Delete(refs + ".partial");
     }
 
     // Rejects an index destination inside the game directory.
@@ -180,7 +169,7 @@ internal sealed class IndexJob
     }
     // Processes all sources and publishes an audited index.
     private void RunFiles((string path, bool bundle)[] sources, StreamWriter assets, StreamWriter refs,
-        string assetsPath, string refsPath, string logPath)
+        string assetsPath, string refsPath)
     {
         indexingProgress?.Report(new IndexProgress(0, sources.Length, false));
         for (int i = 0; i < sources.Length; i++)
@@ -195,29 +184,18 @@ internal sealed class IndexJob
         indexingProgress?.Report(new IndexProgress(sources.Length, sources.Length, true));
         AuditReferences(assetsPath + ".partial", refsPath + ".partial");
         cancellation.ThrowIfCancellationRequested();
-        PublishIndex(assetsPath, refsPath, logPath);
+        PublishIndex(assetsPath, refsPath);
         indexingProgress?.Report(new IndexProgress(sources.Length, sources.Length, false));
         progress.Report($"Indexing complete: {objects:N0} objects, {links:N0} references, {warnings:N0} warnings.");
     }
 
-    // Makes the log visible only after both index files are published.
-    private void PublishIndex(string assets, string refs, string logPath)
+    // Publishes references last so interrupted writes do not appear complete.
+    private static void PublishIndex(string assets, string refs)
     {
-        publishing = true;
-        string previousLog = logPath + ".previous";
-        if (File.Exists(logPath))
-        {
-            File.Move(logPath, previousLog, true);
-        }
-        else if (!File.Exists(previousLog))
-        {
-            File.WriteAllText(previousLog, "");
-        }
+        File.Delete(refs);
         File.Move(assets + ".partial", assets, true);
+        File.Delete(Path.Combine(Path.GetDirectoryName(assets)!, "log.txt.previous"));
         File.Move(refs + ".partial", refs, true);
-        log.Close();
-        File.Move(logPath + ".partial", logPath, true);
-        File.Delete(previousLog);
     }
 
     // Audits indexed references and writes only warnings to the log.
@@ -363,6 +341,6 @@ internal sealed class IndexJob
     private void Warn(string message)
     {
         warnings++;
-        log.WriteLine($"WARNING {message}");
+        log.WriteLine($"WARNING {DateTimeOffset.Now:O}: {message}");
     }
 }

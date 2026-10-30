@@ -44,8 +44,16 @@ public static class Indexer
 
     // Runs a complete indexing job.
     public static void Run(Settings settings, IProgress<string> progress, CancellationToken cancellation,
-        IProgress<IndexProgress>? indexingProgress = null)
+        IProgress<IndexProgress>? indexingProgress = null, TextWriter? log = null)
     {
-        new IndexJob(settings, progress, cancellation, indexingProgress).Run();
+        try
+        {
+            new IndexJob(settings, progress, cancellation, indexingProgress, log ?? TextWriter.Null).Run();
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            log?.WriteLine($"ERROR {DateTimeOffset.Now:O}: {error}");
+            throw;
+        }
     }
 }
