@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build cross-platform core
+        run: dotnet build PrefabExporter.Core/PrefabExporter.Core.csproj --configuration Release
+
+  windows:
+    name: Windows application
+    runs-on: windows-latest
+    needs: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish Windows application
+        shell: bash
+        run: |
+          dotnet publish PrefabExporter.csproj --configuration Release --runtime win-x64 --self-contained true --output "$RUNNER_TEMP/prefabexporter"
+          cp appsettings.example.json "$RUNNER_TEMP/prefabexporter/appsettings.json"
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrefabExporter-win-x64
+          path: ${{ runner.temp }}/prefabexporter/
+          if-no-files-found: error
