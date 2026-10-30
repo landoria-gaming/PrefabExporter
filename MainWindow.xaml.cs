@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private Settings? settings;
     private CancellationTokenSource? cancel;
+    private bool versionAlreadyIndexed;
 
     // Initializes the window and reads its configuration.
     public MainWindow()
@@ -46,9 +47,28 @@ public partial class MainWindow : Window
         {
             return;
         }
-        IndexSelector.ItemsSource = IndexCatalog.Find(settings.IndexPath);
+        var indexes = IndexCatalog.Find(settings.IndexPath);
+        string? version = DetectGameVersion(settings.ValheimPath);
+        GameStatus.Text = $"Valheim path: {settings.ValheimPath} | Version: {version ?? "unavailable"}";
+        GameStatus.ToolTip = GameStatus.Text;
+        versionAlreadyIndexed = version != null && indexes.Any(entry =>
+            string.Equals(entry.Version, version, StringComparison.OrdinalIgnoreCase));
+        IndexSelector.ItemsSource = indexes;
         IndexSelector.SelectedIndex = IndexSelector.Items.Count > 0 ? 0 : -1;
-        UpdateSearchAvailability();
+        SetIndexingState(cancel != null);
+    }
+
+    // Detects the configured game version when its files are available.
+    private static string? DetectGameVersion(string gamePath)
+    {
+        try
+        {
+            return Indexer.Version(gamePath);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     // Shows saved diagnostics when the selected index changes.
@@ -159,7 +179,8 @@ public partial class MainWindow : Window
     // Enables controls appropriate to the current indexing state.
     private void SetIndexingState(bool indexing)
     {
-        IndexButton.IsEnabled = !indexing;
+        IndexButton.IsEnabled = !indexing && !versionAlreadyIndexed;
+        IndexButton.ToolTip = versionAlreadyIndexed ? "A completed index for this game version already exists." : null;
         bool selected = IndexSelector.SelectedItem is IndexEntry;
         SearchButton.IsEnabled = !indexing && selected;
         RefsButton.IsEnabled = !indexing && selected;

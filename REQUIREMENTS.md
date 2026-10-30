@@ -23,6 +23,8 @@ Build a desktop application for exploring assets from a local Valheim installati
 ## Indexing and references
 
 - Provide an Index Assets button and a progress bar. Show the bar only during indexing, fill the remaining width, and use indeterminate progress during the reference audit.
+- Prevent indexing when a completed index already exists for the detected game version.
+- Show the configured Valheim path and detected game version in a status bar.
 - Write two JSON Lines files: `assets-{version}.jsonl` for assets and `references-{version}.jsonl` for links. Use the detected game version in each filename, for example `assets-1.0.21.jsonl`.
 - Write only errors and warnings to `log.txt` in the version directory; do not persist indexing status. Display warnings and errors in the text area.
 - Audit indexed references after indexing and write unresolved targets, grouped by cause with example sources, to `log.txt`.

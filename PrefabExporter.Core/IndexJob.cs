@@ -44,6 +44,10 @@ internal sealed class IndexJob
         manifest = SoftReferenceManifest.Load(Path.Combine(softRef, "manifest"),
             Path.Combine(softRef, "manifest_extended"));
         string version = Indexer.Version(game);
+        if (IndexCatalog.Find(destination).Any(entry => string.Equals(entry.Version, version, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"A completed index for version {version} already exists.");
+        }
         destination = IndexLocation.Resolve(destination, game, version);
         ValidateDestination(game, destination);
         Directory.CreateDirectory(destination);

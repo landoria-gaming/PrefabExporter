@@ -13,6 +13,7 @@
                     <Button x:Name="IndexButton"
                             Margin="0,0,6,0"
                             Padding="10,4"
+                            ToolTipService.ShowOnDisabled="True"
                             Click="Index_Click"
                             Content="Index assets" />
                     <ComboBox x:Name="IndexSelector"
@@ -56,6 +57,14 @@
                         Content="Show references" />
             </WrapPanel>
         </StackPanel>
+        <StatusBar DockPanel.Dock="Bottom"
+                   Margin="0,8,0,0">
+            <StatusBarItem>
+                <TextBlock x:Name="GameStatus"
+                           Text="Valheim path: not configured | Version: unavailable"
+                           TextTrimming="CharacterEllipsis" />
+            </StatusBarItem>
+        </StatusBar>
         <TextBox x:Name="Output"
                  AcceptsReturn="True"
                  HorizontalScrollBarVisibility="Auto"
