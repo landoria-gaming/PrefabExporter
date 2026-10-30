@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="BlenderExport.py" />
+    <EmbeddedResource Include="Export\BlenderExport.py" LogicalName="PrefabExporter.Core.BlenderExport.py" />
   </ItemGroup>
 
   <ItemGroup>
