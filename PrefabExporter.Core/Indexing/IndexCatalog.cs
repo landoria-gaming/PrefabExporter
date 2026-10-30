@@ -37,11 +37,10 @@ public static class IndexCatalog
     {
         string assets = Path.Combine(directory, $"assets-{version}.bin");
         string references = Path.Combine(directory, $"references-{version}.bin");
-        string log = Path.Combine(directory, "log.txt");
         string prefabs = Path.Combine(directory, $"prefabs-{version}.jsonl");
         string table = ReferenceLookup.TablePath(references);
         if (!File.Exists(assets) || !File.Exists(references) || !File.Exists(prefabs) || !File.Exists(table) ||
-            File.Exists(log + ".previous") || new FileInfo(assets).Length <= 8)
+            !File.Exists(ReferenceLookup.TablePath(assets)) || new FileInfo(assets).Length <= 8)
         {
             return;
         }

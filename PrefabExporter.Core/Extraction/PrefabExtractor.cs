@@ -64,6 +64,7 @@ public static class PrefabExtractor
             return $"Extracted {succeeded} assets to: {destination}\n\n{result}" +
                 "\nFBX export supports active static meshes with embedded color and normal textures. " +
                 "FBX import may restore linear filtering. " +
+                "Normal map coordinates are saved in the NormalUV layer; importers may require assigning it manually. " +
                 "Unity-specific shader effects may differ. Individual GLBs use a default material.";
         }
         finally

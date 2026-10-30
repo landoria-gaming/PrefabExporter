@@ -37,7 +37,9 @@ internal sealed class PrefabSceneBuilder
             {
                 throw new InvalidDataException("Prefab hierarchy is ambiguous or contains unresolved objects.");
             }
-            AddGameObject(plan.Roots.Single(), -1, true, cancellation);
+            string root = plan.Roots.Single();
+            CollectLods(root, true, new HashSet<string>(StringComparer.OrdinalIgnoreCase), cancellation);
+            AddGameObject(root, -1, true, cancellation);
             if (!nodes.Any(node => node.Mesh != null))
             {
                 throw new InvalidDataException("No active mesh was found in the prefab.");
@@ -61,7 +63,6 @@ internal sealed class PrefabSceneBuilder
             return;
         }
         var components = Outgoing(key, "/m_Component[").Select(edge => edge.To).ToArray();
-        ConfigureLods(components);
         string transformKey = components.FirstOrDefault(component => GetAsset(component).Type is "Transform" or "RectTransform")
             ?? throw new InvalidDataException("GameObject transform is missing.");
         var transform = reader.Read(GetAsset(transformKey));
@@ -76,6 +77,29 @@ internal sealed class PrefabSceneBuilder
                 throw new InvalidDataException("A child GameObject could not be resolved.");
             }
             AddGameObject(childObject, index, false, cancellation);
+        }
+    }
+
+    // Finds active LOD groups before any renderers are assembled.
+    private void CollectLods(string key, bool root, HashSet<string> seen, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (!seen.Add(key) || (!root && !reader.Read(GetAsset(key))["m_IsActive"].AsBool))
+        {
+            return;
+        }
+        var components = Outgoing(key, "/m_Component[").Select(edge => edge.To).ToArray();
+        ConfigureLods(components);
+        string transform = components.FirstOrDefault(component => GetAsset(component).Type is "Transform" or "RectTransform")
+            ?? throw new InvalidDataException("GameObject transform is missing.");
+        foreach (var child in Outgoing(transform, "/m_Children["))
+        {
+            string? childObject = Outgoing(child.To, "/m_GameObject[").Select(edge => edge.To).FirstOrDefault();
+            if (childObject == null)
+            {
+                throw new InvalidDataException("A child GameObject could not be resolved.");
+            }
+            CollectLods(childObject, false, seen, cancellation);
         }
     }
 

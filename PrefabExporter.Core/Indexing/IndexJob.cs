@@ -217,7 +217,6 @@ internal sealed class IndexJob
         File.Move(prefabs + ".partial", prefabs, true);
         string table = ReferenceLookup.TablePath(refs);
         File.Move(table + ".partial", table, true);
-        File.Delete(Path.Combine(Path.GetDirectoryName(assets)!, "log.txt.previous"));
         File.Move(refs + ".partial", refs, true);
     }
 

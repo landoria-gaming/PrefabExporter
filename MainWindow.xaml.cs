@@ -319,11 +319,18 @@ public partial class MainWindow : Window
         }
         string assets = Path.Combine(entry.Directory, $"assets-{entry.Version}.bin");
         string references = Path.Combine(entry.Directory, $"references-{entry.Version}.bin");
-        if (File.Exists(Path.Combine(entry.Directory, "log.txt.previous")) || !File.Exists(assets) || !File.Exists(references))
+        if (!File.Exists(assets) || !File.Exists(references) || !File.Exists(ReferenceLookupPath(assets)) ||
+            !File.Exists(ReferenceLookupPath(references)))
         {
             throw new InvalidOperationException("The selected index is no longer complete.");
         }
         return Path.Combine(entry.Directory, $"{name}-{entry.Version}.bin");
+    }
+
+    // Returns the offset table path associated with an index file.
+    private static string ReferenceLookupPath(string path)
+    {
+        return Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".offsets.bin");
     }
 
     // Runs a search and displays its result or error.

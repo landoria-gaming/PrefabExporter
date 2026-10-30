@@ -79,9 +79,18 @@ def bake_fbx_uvs():
             continue
         obj.data = obj.data.copy()
         uvs = obj.data.uv_layers.active.data
+        normal_uv = obj.data.uv_layers.new(name="NormalUV").data
         for polygon in obj.data.polygons:
             material = obj.data.materials[polygon.material_index] if obj.data.materials else None
             mapping = albedo_mapping(material)
+            normal_mapping = normal_texture_mapping(material)
+            if normal_mapping:
+                normal_scale = normal_mapping.inputs["Scale"].default_value
+                normal_offset = normal_mapping.inputs["Location"].default_value
+                for index in polygon.loop_indices:
+                    uv = uvs[index].uv
+                    normal_uv[index].uv = (uv.x * normal_scale.x + normal_offset.x,
+                        uv.y * normal_scale.y + normal_offset.y)
             if mapping is None:
                 continue
             mappings.add(mapping)
@@ -94,6 +103,22 @@ def bake_fbx_uvs():
     for mapping in mappings:
         mapping.inputs["Scale"].default_value = (1, 1, 1)
         mapping.inputs["Location"].default_value = (0, 0, 0)
+
+# Finds the mapping node connected to the normal texture.
+def normal_texture_mapping(material):
+    if not material or not material.use_nodes:
+        return None
+    shader = material.node_tree.nodes.get("Principled BSDF")
+    if not shader or not shader.inputs["Normal"].is_linked:
+        return None
+    normal = shader.inputs["Normal"].links[0].from_node
+    if normal.type != "NORMAL_MAP" or not normal.inputs["Color"].is_linked:
+        return None
+    texture = normal.inputs["Color"].links[0].from_node
+    if texture.type != "TEX_IMAGE" or not texture.inputs["Vector"].is_linked:
+        return None
+    mapping = texture.inputs["Vector"].links[0].from_node
+    return mapping if mapping.type == "MAPPING" else None
 
 # Finds the mapping node connected to a material's albedo texture.
 def albedo_mapping(material):
