@@ -21,7 +21,7 @@ internal sealed class ReferenceAuditor
         this.cancellation = cancellation;
     }
 
-    // Audits both JSONL files and writes a grouped text report.
+    // Audits both binary indexes and writes a grouped text report.
     public void Run(string assets, string references, TextWriter writer)
     {
         ReadAssets(assets);
@@ -46,16 +46,16 @@ internal sealed class ReferenceAuditor
     // Reads object identities and SoftReference IDs without retaining their contents.
     private void ReadAssets(string path)
     {
-        foreach (string line in File.ReadLines(path))
+        using var reader = new BinaryIndexReader(path);
+        IndexedAsset? asset;
+        while ((asset = reader.ReadAsset()) != null)
         {
             cancellation.ThrowIfCancellationRequested();
-            using var document = JsonDocument.Parse(line);
-            var asset = document.RootElement;
-            var key = (GetCollection(asset.GetProperty("collection").GetString()), asset.GetProperty("path_id").GetInt64());
+            var key = (GetCollection(asset.Collection), asset.PathId);
             objects.Add(key);
-            if (asset.TryGetProperty("soft_id", out var id) && id.ValueKind == JsonValueKind.String)
+            if (asset.SoftId != null)
             {
-                soft[id.GetString()!] = key;
+                soft[asset.SoftId] = key;
             }
         }
     }
@@ -63,10 +63,12 @@ internal sealed class ReferenceAuditor
     // Checks every indexed reference against the known targets.
     private void ReadReferences(string path)
     {
-        foreach (string line in File.ReadLines(path))
+        using var reader = new BinaryIndexReader(path);
+        JsonDocument? next;
+        while ((next = reader.Read()) != null)
         {
             cancellation.ThrowIfCancellationRequested();
-            using var document = JsonDocument.Parse(line);
+            using var document = next;
             var source = document.RootElement;
             foreach (var reference in source.GetProperty("references").EnumerateArray())
             {

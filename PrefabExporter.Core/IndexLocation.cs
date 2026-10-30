@@ -12,7 +12,7 @@ public static class IndexLocation
     {
         string root = Path.Combine(Path.GetFullPath(indexRoot), version);
         string game = Path.GetFullPath(gamePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        string assets = Path.Combine(root, $"assets-{version}.jsonl");
+        string assets = Path.Combine(root, $"assets-{version}.bin");
         if (!File.Exists(assets) || MatchesGame(assets, game))
         {
             return root;
@@ -25,12 +25,12 @@ public static class IndexLocation
     // Checks the source path stored in the first indexed asset.
     private static bool MatchesGame(string assets, string game)
     {
-        string? line = File.ReadLines(assets).FirstOrDefault();
-        if (line == null)
+        using var reader = new BinaryIndexReader(assets);
+        using var document = reader.Read();
+        if (document == null)
         {
             return false;
         }
-        using var document = JsonDocument.Parse(line);
         if (!document.RootElement.TryGetProperty("source", out var source) || source.ValueKind != JsonValueKind.String)
         {
             return false;

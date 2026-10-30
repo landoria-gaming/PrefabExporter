@@ -17,3 +17,6 @@ indexes/
 
 # Application log
 /log.txt
+
+# Extracted files
+output/

@@ -35,11 +35,13 @@ public static class IndexCatalog
     // Adds an index only when its published files are present.
     private static void AddEntry(List<IndexEntry> entries, string directory, string version)
     {
-        string assets = Path.Combine(directory, $"assets-{version}.jsonl");
-        string references = Path.Combine(directory, $"references-{version}.jsonl");
+        string assets = Path.Combine(directory, $"assets-{version}.bin");
+        string references = Path.Combine(directory, $"references-{version}.bin");
         string log = Path.Combine(directory, "log.txt");
-        if (!File.Exists(assets) || !File.Exists(references) ||
-            File.Exists(log + ".previous") || new FileInfo(assets).Length == 0)
+        string prefabs = Path.Combine(directory, $"prefabs-{version}.jsonl");
+        string table = ReferenceLookup.TablePath(references);
+        if (!File.Exists(assets) || !File.Exists(references) || !File.Exists(prefabs) || !File.Exists(table) ||
+            File.Exists(log + ".previous") || new FileInfo(assets).Length <= 8)
         {
             return;
         }

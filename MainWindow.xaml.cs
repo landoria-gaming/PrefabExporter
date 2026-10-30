@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,6 +12,9 @@ public partial class MainWindow : Window
     private Settings? settings;
     private CancellationTokenSource? cancel;
     private bool versionAlreadyIndexed;
+    private CancellationTokenSource? suggestionsCancellation;
+    private bool suggestionsDisplayed;
+    private bool selectingSuggestion;
 
     // Initializes the window and reads its configuration.
     public MainWindow()
@@ -75,6 +77,7 @@ public partial class MainWindow : Window
     // Shows saved diagnostics when the selected index changes.
     private void IndexSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        CancelSuggestions();
         if (IndexSelector.SelectedItem is not IndexEntry entry)
         {
             UpdateSearchAvailability();
@@ -82,6 +85,7 @@ public partial class MainWindow : Window
         }
         Output.Text = $"Selected index: {entry.Version}";
         UpdateSearchAvailability();
+        _ = UpdateSuggestions();
     }
 
     // Enables searches only when a completed index is selected.
@@ -89,8 +93,10 @@ public partial class MainWindow : Window
     {
         bool available = cancel == null;
         bool selected = IndexSelector.SelectedItem is IndexEntry;
-        SearchButton.IsEnabled = available && selected;
+        PrefabName.IsEnabled = available && selected;
         RefsButton.IsEnabled = available && selected;
+        ExtractButton.IsEnabled = available && selected;
+        UnityExportButton.IsEnabled = available && selected;
         IndexSelector.IsEnabled = available && IndexSelector.Items.Count > 0;
     }
 
@@ -158,11 +164,17 @@ public partial class MainWindow : Window
     // Enables controls appropriate to the current indexing state.
     private void SetIndexingState(bool indexing)
     {
+        if (indexing)
+        {
+            CancelSuggestions();
+        }
         IndexButton.IsEnabled = !indexing && !versionAlreadyIndexed;
         IndexButton.ToolTip = versionAlreadyIndexed ? "A completed index for this game version already exists." : null;
         bool selected = IndexSelector.SelectedItem is IndexEntry;
-        SearchButton.IsEnabled = !indexing && selected;
+        PrefabName.IsEnabled = !indexing && selected;
         RefsButton.IsEnabled = !indexing && selected;
+        ExtractButton.IsEnabled = !indexing && selected;
+        UnityExportButton.IsEnabled = !indexing && selected;
         IndexSelector.IsEnabled = !indexing && IndexSelector.Items.Count > 0;
         CancelButton.IsEnabled = indexing;
     }
@@ -173,43 +185,95 @@ public partial class MainWindow : Window
         cancel?.Cancel();
     }
 
-    // Searches for prefabs matching the entered text.
-    private async void Search_Click(object sender, RoutedEventArgs e)
+    // Starts autocomplete after the search text changes.
+    private async void PrefabName_TextChanged(object sender, TextChangedEventArgs e)
     {
-        string query = PrefabName.Text.Trim();
-        if (query.Length == 0)
-        {
-            Output.Text = "Enter a prefab name.";
-            return;
-        }
-        await Execute(token => FindPrefabs(GetIndex("assets"), query, token));
+        await UpdateSuggestions();
     }
 
-    // Lists indexed prefab names matching a search term.
-    private static async Task<string> FindPrefabs(string path, string query, CancellationToken cancellation)
+    // Schedules suggestions for the current text and selected index.
+    private async Task UpdateSuggestions()
     {
-        var result = new StringBuilder();
-        using var reader = File.OpenText(path);
-        string? line;
-        while ((line = await reader.ReadLineAsync(cancellation)) != null)
+        if (!IsLoaded || selectingSuggestion)
         {
-            using var document = JsonDocument.Parse(line);
-            var item = document.RootElement;
-            string name = item.GetProperty("name").GetString() ?? "";
-            if (item.GetProperty("type").GetString() == "GameObject" &&
-                item.TryGetProperty("asset_path", out var assetPath) && assetPath.ValueKind == JsonValueKind.String &&
-                assetPath.GetString()!.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) &&
-                name.Contains(query, StringComparison.OrdinalIgnoreCase))
+            return;
+        }
+        CancelSuggestions();
+        string query = PrefabName.Text.Trim();
+        if (query.Length < 2 || IndexSelector.SelectedItem is not IndexEntry || cancel != null)
+        {
+            if (query.Length < 2)
             {
-                result.AppendLine($"{name} | {assetPath.GetString()} | {item.GetProperty("path_id")}");
+                Output.Clear();
             }
-            if (result.Length > 100000)
+            return;
+        }
+        var request = new CancellationTokenSource();
+        suggestionsCancellation = request;
+        try
+        {
+            await LoadSuggestions(query, request.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception error)
+        {
+            if (!request.IsCancellationRequested)
             {
-                result.AppendLine("Results truncated.");
-                break;
+                ApplicationLog.Error(error);
+                Output.Text = "Error: " + error.Message;
             }
         }
-        return result.Length == 0 ? "No results." : result.ToString();
+        finally
+        {
+            if (suggestionsCancellation == request)
+            {
+                suggestionsCancellation = null;
+            }
+            request.Dispose();
+        }
+    }
+
+    // Reads matching prefabs in the background and displays the current result.
+    private async Task LoadSuggestions(string query, CancellationToken cancellation)
+    {
+        string assets = GetIndex("assets");
+        await Task.Delay(150, cancellation);
+        var matches = await Task.Run(() => PrefabSearch.Find(assets, query, cancellation), cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        Output.Text = matches.Count == 0 ? "No results." :
+            string.Join(Environment.NewLine, matches.Select(item => $"{item.Name} | {item.Path}"));
+        suggestionsDisplayed = matches.Count > 0;
+    }
+
+    // Stops an obsolete autocomplete request.
+    private void CancelSuggestions()
+    {
+        suggestionsDisplayed = false;
+        suggestionsCancellation?.Cancel();
+        suggestionsCancellation = null;
+    }
+
+    // Selects a suggestion from the text area on double-click.
+    private void Output_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!suggestionsDisplayed)
+        {
+            return;
+        }
+        int line = Output.GetLineIndexFromCharacterIndex(Output.CaretIndex);
+        string text = Output.GetLineText(line).TrimEnd('\r', '\n');
+        int separator = text.IndexOf(" | ", StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            return;
+        }
+        selectingSuggestion = true;
+        PrefabName.Text = text[..separator];
+        selectingSuggestion = false;
+        CancelSuggestions();
+        Output.Text = text;
     }
 
     // Follows references for an exact prefab name.
@@ -222,7 +286,49 @@ public partial class MainWindow : Window
             return;
         }
         var progress = new Progress<string>(message => Output.Text = message);
-        await Execute(token => Explorer.References(GetIndex("assets"), GetIndex("references"), query, progress, token));
+        await Execute(() =>
+        {
+            string assets = GetIndex("assets");
+            string references = GetIndex("references");
+            return token => Explorer.References(assets, references, query, progress, token);
+        });
+    }
+
+    // Extracts the selected prefab resources into the application output directory.
+    private async void Extract_Click(object sender, RoutedEventArgs e)
+    {
+        string query = PrefabName.Text.Trim();
+        if (query.Length == 0)
+        {
+            Output.Text = "Enter the exact prefab name.";
+            return;
+        }
+        var progress = new Progress<string>(message => Output.Text = message);
+        await Execute(() =>
+        {
+            string assets = GetIndex("assets");
+            string references = GetIndex("references");
+            return token => PrefabExtractor.Extract(assets, references, query, AppContext.BaseDirectory, progress, token, ApplicationLog.Writer, settings?.AssetRipperPath);
+        });
+    }
+
+    // Exports a Unity project containing the selected prefab and loaded assets.
+    private async void UnityExport_Click(object sender, RoutedEventArgs e)
+    {
+        string query = PrefabName.Text.Trim();
+        if (query.Length == 0)
+        {
+            Output.Text = "Enter the exact prefab name.";
+            return;
+        }
+        var progress = new Progress<string>(message => Output.Text = message);
+        await Execute(() =>
+        {
+            string assets = GetIndex("assets");
+            string references = GetIndex("references");
+            return token => UnityProjectExporter.Export(assets, references, query, AppContext.BaseDirectory,
+                settings?.AssetRipperPath, progress, token);
+        });
     }
 
     // Returns a file from the selected completed index.
@@ -232,23 +338,24 @@ public partial class MainWindow : Window
         {
             throw new InvalidOperationException("Select a completed index first.");
         }
-        string assets = Path.Combine(entry.Directory, $"assets-{entry.Version}.jsonl");
-        string references = Path.Combine(entry.Directory, $"references-{entry.Version}.jsonl");
+        string assets = Path.Combine(entry.Directory, $"assets-{entry.Version}.bin");
+        string references = Path.Combine(entry.Directory, $"references-{entry.Version}.bin");
         if (File.Exists(Path.Combine(entry.Directory, "log.txt.previous")) || !File.Exists(assets) || !File.Exists(references))
         {
             throw new InvalidOperationException("The selected index is no longer complete.");
         }
-        return Path.Combine(entry.Directory, $"{name}-{entry.Version}.jsonl");
+        return Path.Combine(entry.Directory, $"{name}-{entry.Version}.bin");
     }
 
     // Runs a search and displays its result or error.
-    private async Task Execute(Func<CancellationToken, Task<string>> action)
+    private async Task Execute(Func<Func<CancellationToken, Task<string>>> prepare)
     {
         SetIndexingState(true);
         cancel = new CancellationTokenSource();
         try
         {
             Output.Text = "Searching...";
+            var action = prepare();
             Output.Text = await Task.Run(() => action(cancel.Token));
         }
         catch (OperationCanceledException)

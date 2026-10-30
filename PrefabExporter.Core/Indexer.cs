@@ -42,6 +42,28 @@ public static class Indexer
         _ => throw new InvalidDataException("Unable to read game version")
     };
 
+    // Builds and atomically publishes an asset lookup for an existing index.
+    public static void BuildAssetLookup(string assetsPath, IProgress<string>? progress, CancellationToken cancellation)
+    {
+        string table = ReferenceLookup.TablePath(assetsPath);
+        string partial = table + ".partial";
+        if (File.Exists(table))
+        {
+            throw new InvalidOperationException("An asset lookup already exists.");
+        }
+        try
+        {
+            using var lookup = new AssetLookup(assetsPath, null, progress, cancellation);
+            lookup.Save(partial, cancellation);
+            cancellation.ThrowIfCancellationRequested();
+            File.Move(partial, table);
+        }
+        finally
+        {
+            File.Delete(partial);
+        }
+    }
+
     // Runs a complete indexing job.
     public static void Run(Settings settings, IProgress<string> progress, CancellationToken cancellation,
         IProgress<IndexProgress>? indexingProgress = null, TextWriter? log = null)

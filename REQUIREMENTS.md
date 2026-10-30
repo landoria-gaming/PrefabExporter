@@ -25,9 +25,11 @@ Build a desktop application for exploring assets from a local Valheim installati
 - Provide an Index Assets button and a progress bar. Show the bar only during indexing, fill the remaining width, and use indeterminate progress during the reference audit.
 - Prevent indexing when a completed index already exists for the detected game version.
 - Show the configured Valheim path and detected game version in a status bar.
-- Write two JSON Lines files: `assets-{version}.jsonl` for assets and `references-{version}.jsonl` for links. Use the detected game version in each filename, for example `assets-1.0.21.jsonl`.
+- Write binary files `assets-{version}.bin` and `references-{version}.bin`, and a text file `prefabs-{version}.jsonl`. Include the detected game version in each filename.
 - Write errors and warnings to a single `log.txt` beside the executable; do not persist indexing status. Display indexing warnings and errors in the text area.
 - Audit indexed references after indexing and write unresolved targets, grouped by cause with example sources, to `log.txt`.
+- During indexing, build `prefabs-{version}.jsonl`, a compact alphabetical prefab list used by search.
+- During indexing, build `assets-{version}.offsets.bin` and `references-{version}.offsets.bin` for direct access to assets and references.
 - Do not use SQLite for the initial release. Read and write large files incrementally to limit memory usage.
 
 - Index asset names, types, bundle locations and stable identifiers when available.
@@ -47,19 +49,24 @@ Build a desktop application for exploring assets from a local Valheim installati
 
 ## Exploration
 
-- Search indexed prefabs by name using the input in the top panel and display matching names in the text area. To inspect a prefab, enter its exact name and click Show References; display its details, hierarchy and references in the same text area.
+- Show matching prefab names and paths alphabetically in the text area as soon as two characters are entered, without a search button. To inspect a prefab, select a suggestion or enter its exact name and click Show References; display its details, hierarchy and references in the same text area.
 
 - Search assets by name, path, type, identifier and bundle.
 - Show an asset's details and all indexed outgoing references, including shaders, scripts, materials, textures, audio, effects and references to external files or bundles.
 - Navigate referenced assets and inspect incoming references where indexed.
 - Browse prefab hierarchy and components, including children.
-- Follow indirect dependencies without a fixed depth limit, including shader and external references. Detect cycles, stream indexed data, and write a complete report to disk with a bounded on-screen preview. Allow cancellation and identify each source field and target.
+- Follow indirect dependencies without a fixed depth limit, including shader and external references. Detect cycles, stream indexed data, and show a bounded result in the text area without saving a report. Omit unrelated sprites from shared atlases. Allow cancellation and identify each source field and target.
 - Filter results by asset type and reference status; handle cycles and deep graphs safely.
-- Display prefab, model, material, texture, icon, sound and effect relationships when available.
+- Show prefab meshes, materials, shaders, material texture slots such as albedo and normal maps, and related icons.
 
 ## Future scope
 
-- Asset export is outside the first release. A later release may export 3D models as FBX with their materials and textures, and report unsupported content.
+- Configure the AssetRipper executable or its directory through `AssetRipperPath` in `appsettings.json`.
+- Extract selected prefab resources with AssetRipper into `output/<prefab>/other` next to the executable. Export icons and textures as PNG, meshes as GLB, and materials, shaders and prefab data separately. Keep the assembled FBX and Blender file in `output/<prefab>`. Report unsupported or missing resources.
+- Assemble an FBX for active static meshes with their transforms, color textures and normal maps, using Blender in the background. Report unsupported content.
+- Also save a Blender file with packed textures and closest-pixel filtering, since Blender's FBX importer does not preserve that filtering.
+- Build separate scenes for Blender and FBX. Enlarge FBX color textures with nearest-neighbor sampling to reduce smoothing in importers that use linear filtering.
+- Provide a separate Unity export using AssetRipper. Save its project under `output/<prefab>/unity` without overwriting existing output, and report that the source files may include other assets and unresolved references.
 
 ## Acceptance criteria
 

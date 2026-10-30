@@ -4,14 +4,14 @@ using AssetsTools.NET.Extra;
 
 namespace PrefabExporter.Core;
 
-// Writes objects and their serialized references to JSON Lines.
+// Writes objects and their serialized references to binary indexes.
 internal sealed class AssetIndexWriter
 {
     private readonly AssetsManager manager;
     private readonly AssetsFileInstance file;
     private readonly string source;
-    private readonly StreamWriter assets;
-    private readonly StreamWriter references;
+    private readonly TextWriter assets;
+    private readonly TextWriter references;
     private readonly CancellationToken cancellation;
     private readonly Action<string> warn;
     private readonly SoftReferenceManifest manifest;
@@ -23,7 +23,7 @@ internal sealed class AssetIndexWriter
 
     // Stores the source and output writers.
     public AssetIndexWriter(AssetsManager manager, AssetsFileInstance file, string source,
-        StreamWriter assets, StreamWriter references, CancellationToken cancellation, Action<string> warn,
+        TextWriter assets, TextWriter references, CancellationToken cancellation, Action<string> warn,
         SoftReferenceManifest manifest)
     {
         this.manager = manager;

@@ -51,27 +51,31 @@ internal sealed class IndexJob
         destination = IndexLocation.Resolve(destination, game, version);
         ValidateDestination(game, destination);
         Directory.CreateDirectory(destination);
-        string assets = Path.Combine(destination, $"assets-{version}.jsonl");
-        string refs = Path.Combine(destination, $"references-{version}.jsonl");
+        string assets = Path.Combine(destination, $"assets-{version}.bin");
+        string refs = Path.Combine(destination, $"references-{version}.bin");
+        string prefabs = Path.Combine(destination, $"prefabs-{version}.jsonl");
         try
         {
-            using var assetWriter = new StreamWriter(assets + ".partial", false);
-            using var refWriter = new StreamWriter(refs + ".partial", false);
+            using var assetWriter = new BinaryIndexWriter(assets + ".partial");
+            using var refWriter = new BinaryIndexWriter(refs + ".partial");
             CheckUnityVersion();
-            RunFiles(GetSources(bundles), assetWriter, refWriter, assets, refs);
+            RunFiles(GetSources(bundles), assetWriter, refWriter, assets, refs, prefabs);
         }
         catch
         {
-            CleanPartialFiles(assets, refs);
+            CleanPartialFiles(assets, refs, prefabs);
             throw;
         }
     }
 
     // Removes temporary files left by an interrupted indexing run.
-    private static void CleanPartialFiles(string assets, string refs)
+    private static void CleanPartialFiles(string assets, string refs, string prefabs)
     {
         File.Delete(assets + ".partial");
         File.Delete(refs + ".partial");
+        File.Delete(prefabs + ".partial");
+        File.Delete(ReferenceLookup.TablePath(refs) + ".partial");
+        File.Delete(ReferenceLookup.TablePath(assets) + ".partial");
     }
 
     // Rejects an index destination inside the game directory.
@@ -168,8 +172,8 @@ internal sealed class IndexJob
         return manager.LoadAssetsFileFromBundle(bundle, index, false);
     }
     // Processes all sources and publishes an audited index.
-    private void RunFiles((string path, bool bundle)[] sources, StreamWriter assets, StreamWriter refs,
-        string assetsPath, string refsPath)
+    private void RunFiles((string path, bool bundle)[] sources, TextWriter assets, TextWriter refs,
+        string assetsPath, string refsPath, string prefabsPath)
     {
         indexingProgress?.Report(new IndexProgress(0, sources.Length, false));
         for (int i = 0; i < sources.Length; i++)
@@ -184,16 +188,35 @@ internal sealed class IndexJob
         indexingProgress?.Report(new IndexProgress(sources.Length, sources.Length, true));
         AuditReferences(assetsPath + ".partial", refsPath + ".partial");
         cancellation.ThrowIfCancellationRequested();
-        PublishIndex(assetsPath, refsPath);
+        PrefabSearch.Build(assetsPath + ".partial", prefabsPath + ".partial", progress, cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        progress.Report("Building asset lookup...");
+        using (var assetLookup = new AssetLookup(assetsPath + ".partial", null, progress, cancellation))
+        {
+            assetLookup.Save(ReferenceLookup.TablePath(assetsPath) + ".partial", cancellation);
+        }
+        cancellation.ThrowIfCancellationRequested();
+        progress.Report("Building reference lookup...");
+        using (var lookup = new ReferenceLookup(refsPath + ".partial", null, progress, cancellation))
+        {
+            lookup.Save(ReferenceLookup.TablePath(refsPath) + ".partial", cancellation);
+        }
+        cancellation.ThrowIfCancellationRequested();
+        PublishIndex(assetsPath, refsPath, prefabsPath);
         indexingProgress?.Report(new IndexProgress(sources.Length, sources.Length, false));
         progress.Report($"Indexing complete: {objects:N0} objects, {links:N0} references, {warnings:N0} warnings.");
     }
 
     // Publishes references last so interrupted writes do not appear complete.
-    private static void PublishIndex(string assets, string refs)
+    private static void PublishIndex(string assets, string refs, string prefabs)
     {
         File.Delete(refs);
         File.Move(assets + ".partial", assets, true);
+        string assetTable = ReferenceLookup.TablePath(assets);
+        File.Move(assetTable + ".partial", assetTable, true);
+        File.Move(prefabs + ".partial", prefabs, true);
+        string table = ReferenceLookup.TablePath(refs);
+        File.Move(table + ".partial", table, true);
         File.Delete(Path.Combine(Path.GetDirectoryName(assets)!, "log.txt.previous"));
         File.Move(refs + ".partial", refs, true);
     }
@@ -206,7 +229,7 @@ internal sealed class IndexJob
         auditor.Run(assets, references, log);
     }
     // Opens one source and records its objects.
-    private void ProcessSource((string path, bool bundle) source, StreamWriter assets, StreamWriter refs)
+    private void ProcessSource((string path, bool bundle) source, TextWriter assets, TextWriter refs)
     {
         var manager = new AssetsManager();
         try
@@ -237,7 +260,7 @@ internal sealed class IndexJob
     }
 
     // Processes each serialized file inside a bundle.
-    private void ProcessBundle(AssetsManager manager, string path, StreamWriter assets, StreamWriter refs)
+    private void ProcessBundle(AssetsManager manager, string path, TextWriter assets, TextWriter refs)
     {
         var bundle = manager.LoadBundleFile(path, true);
         var roots = new List<(string Collection, long PathId)>();
@@ -279,7 +302,7 @@ internal sealed class IndexJob
         }
     }
     // Opens a standalone file using the game assemblies and type trees.
-    private void ProcessStandalone(AssetsManager manager, string path, StreamWriter assets, StreamWriter refs)
+    private void ProcessStandalone(AssetsManager manager, string path, TextWriter assets, TextWriter refs)
     {
         PrepareTypeData(manager);
         var file = manager.LoadAssetsFile(path, false);
@@ -303,7 +326,7 @@ internal sealed class IndexJob
     }
     // Writes all objects from one serialized file.
     private void ProcessFile(AssetsManager manager, AssetsFileInstance file, string path,
-        StreamWriter assets, StreamWriter refs, List<(string Collection, long PathId)>? roots = null)
+        TextWriter assets, TextWriter refs, List<(string Collection, long PathId)>? roots = null)
     {
         var writer = new AssetIndexWriter(manager, file, path, assets, refs, cancellation, Warn, manifest);
         writer.Write();
@@ -314,7 +337,7 @@ internal sealed class IndexJob
 
     // Writes synthetic scene entries and their root transforms.
     private void WriteScenes(string bundle, List<(string Collection, long PathId)> roots,
-        StreamWriter assets, StreamWriter refs)
+        TextWriter assets, TextWriter refs)
     {
         var scenes = manifest.Scenes(Path.GetFileName(bundle));
         if (scenes.Count > 1)
