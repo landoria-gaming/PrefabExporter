@@ -28,7 +28,6 @@ jobs:
   windows:
     name: Windows application
     runs-on: windows-latest
-    needs: core
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -45,3 +44,4 @@ jobs:
           name: PrefabExporter-win-x64
           path: ${{ runner.temp }}/prefabexporter/
           if-no-files-found: error
+
