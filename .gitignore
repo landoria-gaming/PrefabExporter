@@ -1,0 +1,16 @@
+# Build output
+**/bin/
+**/obj/
+
+# IDE and user settings
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local configuration and generated indexes
+/appsettings.json
+indexes/
+*.partial

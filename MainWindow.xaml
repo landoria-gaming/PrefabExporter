@@ -1,0 +1,66 @@
+<Window x:Class="PrefabExporter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PrefabExporter"
+        Width="1050"
+        Height="650">
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top"
+                    Margin="0,0,0,8">
+            <DockPanel Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Left"
+                            Orientation="Horizontal">
+                    <Button x:Name="IndexButton"
+                            Margin="0,0,6,0"
+                            Padding="10,4"
+                            Click="Index_Click"
+                            Content="Index assets" />
+                    <ComboBox x:Name="IndexSelector"
+                              Width="120"
+                              Margin="0,0,6,0"
+                              DisplayMemberPath="Version"
+                              SelectionChanged="IndexSelector_SelectionChanged" />
+                    <Button x:Name="CancelButton"
+                            Margin="0,0,6,0"
+                            Padding="10,4"
+                            Click="Cancel_Click"
+                            Content="Cancel"
+                            IsEnabled="False" />
+                    <Button Padding="10,4"
+                            Content="Export all"
+                            IsEnabled="False" />
+                </StackPanel>
+                <ProgressBar x:Name="IndexProgressBar"
+                             Height="16"
+                             Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             AutomationProperties.Name="Indexing progress"
+                             Minimum="0"
+                             Maximum="1"
+                             Value="0"
+                             Visibility="Collapsed" />
+            </DockPanel>
+            <WrapPanel>
+                <TextBox x:Name="PrefabName"
+                         Width="220"
+                         Margin="0,0,6,0" />
+                <Button x:Name="SearchButton"
+                        Margin="0,0,6,0"
+                        Padding="10,4"
+                        Click="Search_Click"
+                        Content="Search" />
+                <Button x:Name="RefsButton"
+                        Margin="0,0,6,0"
+                        Padding="10,4"
+                        Click="References_Click"
+                        Content="Show references" />
+            </WrapPanel>
+        </StackPanel>
+        <TextBox x:Name="Output"
+                 AcceptsReturn="True"
+                 HorizontalScrollBarVisibility="Auto"
+                 IsReadOnly="True"
+                 TextWrapping="NoWrap"
+                 VerticalScrollBarVisibility="Auto" />
+    </DockPanel>
+</Window>
