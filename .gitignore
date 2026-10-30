@@ -12,6 +12,7 @@
 
 # Local configuration and generated indexes
 /appsettings.json
+/PrefabExporter.UI/appsettings.json
 indexes/
 *.partial
 

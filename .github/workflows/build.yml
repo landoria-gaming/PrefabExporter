@@ -36,8 +36,8 @@ jobs:
       - name: Publish Windows application
         shell: bash
         run: |
-          dotnet publish PrefabExporter.csproj --configuration Release --runtime win-x64 --self-contained true --output "$RUNNER_TEMP/prefabexporter"
-          cp appsettings.example.json "$RUNNER_TEMP/prefabexporter/appsettings.json"
+          dotnet publish PrefabExporter.UI/PrefabExporter.UI.csproj --configuration Release --runtime win-x64 --self-contained true --output "$RUNNER_TEMP/prefabexporter"
+          cp PrefabExporter.UI/appsettings.example.json "$RUNNER_TEMP/prefabexporter/appsettings.json"
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
