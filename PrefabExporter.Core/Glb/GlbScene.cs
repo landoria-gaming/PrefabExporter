@@ -53,7 +53,9 @@ internal static class GlbScene
         var position = new Vector3(-Number(p, "X"), Number(p, "Y"), Number(p, "Z"));
         var rotation = new Quaternion(Number(q, "X"), -Number(q, "Y"), -Number(q, "Z"), Number(q, "W"));
         var scale = new Vector3(Number(s, "X"), Number(s, "Y"), Number(s, "Z"));
-        return Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
+        Matrix4x4 transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
+        // Assimp expects column-vector matrices; System.Numerics uses row vectors.
+        return Matrix4x4.Transpose(transform);
     }
 
     // Reads a Unity vector component.
